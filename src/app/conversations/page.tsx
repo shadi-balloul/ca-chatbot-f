@@ -55,7 +55,7 @@ export default function ConversationsPage() {
             )}
             <ConversationList
               userId={userId}
-              activeConversationId={selectedConversation?.id}
+              activeConversationId={selectedConversation?._id}
               onSelectConversation={(conversation) => {
                 setSelectedConversation(conversation);
                 setIsMobileMenuOpen(false);

@@ -24,7 +24,7 @@ export function ChatInterface({ userId, conversation }: ChatInterfaceProps) {
     try {
       setIsLoading(true);
       const fetchedMessages = await conversationService.getConversationHistory(
-        conversation.id,
+        conversation._id,
         userId
       );
       setMessages(fetchedMessages);
@@ -49,47 +49,40 @@ export function ChatInterface({ userId, conversation }: ChatInterfaceProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // In ChatInterface.tsx, update the handleSendMessage function:
+
+const handleSendMessage = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!newMessage.trim() || isSending) return;
+  
+  try {
+    setIsSending(true);
     
-    if (!newMessage.trim() || isSending) return;
+    // Optimistically add user message to UI
+    const tempUserMessage: Message = {
+      role: 'user',
+      content: newMessage,
+      timestamp: new Date().toISOString(),
+    };
     
-    try {
-      setIsSending(true);
-      
-      // Optimistically add user message to UI
-      const tempUserMessage: Message = {
-        id: `temp-${Date.now()}`,
-        conversation_id: conversation.id,
-        user_id: userId,
-        content: newMessage,
-        role: 'user',
-        created_at: new Date().toISOString(),
-      };
-      
-      setMessages(prev => [...prev, tempUserMessage]);
-      setNewMessage('');
-      
-      // Send to API
-      const response = await conversationService.sendMessage(
-        conversation.id,
-        userId,
-        newMessage
-      );
-      
-      // Update with the real messages
-      setMessages(prev => {
-        // Remove temp message and add the real messages
-        const filtered = prev.filter(msg => msg.id !== tempUserMessage.id);
-        return [...filtered, response];
-      });
-      
-    } catch (error) {
-      console.error('Error sending message:', error);
-    } finally {
-      setIsSending(false);
-    }
-  };
+    setMessages(prev => [...prev, tempUserMessage]);
+    setNewMessage('');
+    
+    // Send to API and get bot response
+    const botResponse = await conversationService.sendMessage(
+      conversation._id,  // Changed from id to _id
+      userId,
+      newMessage
+    );
+    
+    // Add the real response from the bot
+    setMessages(prev => [...prev, botResponse]);
+  } catch (error) {
+    console.error('Error sending message:', error);
+  } finally {
+    setIsSending(false);
+  }
+};
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleTimeString([], { 
@@ -114,9 +107,9 @@ export function ChatInterface({ userId, conversation }: ChatInterfaceProps) {
             Start a conversation by sending a message.
           </div>
         ) : (
-          messages.map((message) => (
+          messages.map((message, index) => (
             <div
-              key={message.id}
+              key={index}
               className={`flex ${
                 message.role === 'user' ? 'justify-end' : 'justify-start'
               }`}
@@ -134,7 +127,7 @@ export function ChatInterface({ userId, conversation }: ChatInterfaceProps) {
                     message.role === 'user' ? 'text-blue-200' : 'text-gray-500'
                   }`}
                 >
-                  {formatDate(message.created_at)}
+                  {formatDate(message.timestamp)}
                 </div>
               </div>
             </div>

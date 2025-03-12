@@ -23,35 +23,33 @@ export function ConversationList({
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  const fetchConversations = async () => {
-    try {
-      setIsLoading(true);
-      const fetchedConversations = await conversationService.getUserConversations(userId);
+  // In ConversationList.tsx, update the fetchConversations function:
+
+const fetchConversations = async () => {
+  try {
+    setIsLoading(true);
+    const fetchedConversations = await conversationService.getUserConversations(userId);
+    
+    // Transform conversations to include first message if available
+    const conversationsWithFirstMessages = fetchedConversations.map(conversation => {
+      // Check if the conversation already has messages in the response
+      const userMessages = conversation.messages
+        ? conversation.messages.filter(msg => msg.role === 'user')
+        : [];
       
-      // Fetch first message for each conversation
-      const conversationsWithFirstMessages = await Promise.all(
-        fetchedConversations.map(async (conversation) => {
-          try {
-            const messages = await conversationService.getConversationHistory(conversation.id, userId);
-            const userMessages = messages.filter(msg => msg.role === 'user');
-            return {
-              ...conversation,
-              first_message: userMessages.length > 0 ? userMessages[0].content : undefined
-            };
-          } catch (error) {
-            console.error(`Error fetching messages for conversation ${conversation.id}:`, error);
-            return conversation;
-          }
-        })
-      );
-      
-      setConversations(conversationsWithFirstMessages);
-    } catch (error) {
-      console.error('Error fetching conversations:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return {
+        ...conversation,
+        first_message: userMessages.length > 0 ? userMessages[0].content : undefined
+      };
+    });
+    
+    setConversations(conversationsWithFirstMessages);
+  } catch (error) {
+    console.error('Error fetching conversations:', error);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   useEffect(() => {
     if (userId) {
@@ -102,18 +100,18 @@ export function ConversationList({
         ) : (
           <ul className="divide-y">
             {conversations.map((conversation) => (
-              <li key={conversation.id}>
+              <li key={conversation._id}>
                 <button
                   onClick={() => onSelectConversation(conversation)}
                   className={`w-full text-left px-4 py-3 hover:bg-gray-100 focus:outline-none ${
-                    activeConversationId === conversation.id ? 'bg-gray-100' : ''
+                    activeConversationId === conversation._id ? 'bg-gray-100' : ''
                   }`}
                 >
                   <div className="font-medium truncate">
                     {getConversationTitle(conversation)}
                   </div>
                   <div className="text-sm text-gray-500 truncate">
-                    {new Date(conversation.updated_at).toLocaleDateString()}
+                    {new Date(conversation.last_message_time).toLocaleDateString()}
                   </div>
                 </button>
               </li>
