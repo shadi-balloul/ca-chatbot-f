@@ -56,5 +56,11 @@ export const conversationService = {
         console.error("API Error fetching context cache info:", error.message);
         throw error;
     }
-},
+  },
+  getTokenStats: async (conversationId: string, userId: string): Promise<any> => {
+    const response = await apiClient.get(`/api/conversations/${conversationId}/token-stats`, {
+      params: { user_id: userId },
+    });
+    return response.data;
+  },
 };

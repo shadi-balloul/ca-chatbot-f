@@ -11,6 +11,7 @@ export interface Message {
   role: 'user' | 'model';  // Changed 'assistant' to 'model' to match your API
   content: string;
   timestamp: string;  // Changed from 'created_at' to 'timestamp'
+  token_count?: number | null;  // Added to match your API response
 }
 
 export interface ConversationWithFirstMessage extends Conversation {
