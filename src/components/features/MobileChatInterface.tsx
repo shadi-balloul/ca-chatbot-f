@@ -4,6 +4,11 @@ import { useState, useEffect, useRef } from 'react';
 import { conversationService } from '@/services/api';
 import { Conversation, Message } from '@/types';
 import { PaperAirplaneIcon } from '@heroicons/react/24/solid';
+import { VoiceRecorder } from './VoiceRecorder';
+
+interface ExtendedMessage extends Message {
+  audioUrl?: string;
+}
 
 interface MobileChatInterfaceProps {
   userId: string;
@@ -11,7 +16,7 @@ interface MobileChatInterfaceProps {
 }
 
 export function MobileChatInterface({ userId, conversation }: MobileChatInterfaceProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<ExtendedMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -86,10 +91,38 @@ export function MobileChatInterface({ userId, conversation }: MobileChatInterfac
         newMessage
       );
 
-      // Add the real response from the bot
       setMessages(prev => [...prev, botResponse]);
     } catch (error) {
       console.error('Error sending message:', error);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // Handler for when a voice message is recorded
+  const handleVoiceMessage = async (audioBlob: Blob, transcript: string) => {
+    // Create URL for the audio blob for playback in the chat area
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const tempUserMessage: ExtendedMessage = {
+      role: 'user',
+      content: transcript,
+      timestamp: new Date().toISOString(),
+      audioUrl,
+    };
+
+    // Optimistically add the voice message
+    setMessages(prev => [...prev, tempUserMessage]);
+    try {
+      setIsSending(true);
+      // Send transcript as text to backend to get bot response
+      const botResponse = await conversationService.sendMessage(
+        conversation._id,
+        userId,
+        transcript
+      );
+      setMessages(prev => [...prev, botResponse]);
+    } catch (error) {
+      console.error('Error sending voice message:', error);
     } finally {
       setIsSending(false);
     }
@@ -130,7 +163,14 @@ export function MobileChatInterface({ userId, conversation }: MobileChatInterfac
                     : 'bg-white text-gray-900 shadow-sm'
                 }`}
               >
-                <div className="whitespace-pre-wrap">{message.content}</div>
+                {message.audioUrl ? (
+                  <div className="flex flex-col">
+                    <audio controls src={message.audioUrl} className="mb-1" />
+                    <div className="whitespace-pre-wrap">{message.content}</div>
+                  </div>
+                ) : (
+                  <div className="whitespace-pre-wrap">{message.content}</div>
+                )}
                 <div
                   className={`text-xs mt-1 ${
                     message.role === 'user' ? 'text-blue-200' : 'text-gray-500'
@@ -167,6 +207,8 @@ export function MobileChatInterface({ userId, conversation }: MobileChatInterfac
               }}
             />
           </div>
+          {/* Add the VoiceRecorder button next to the text send button */}
+          <VoiceRecorder onRecordingComplete={handleVoiceMessage} />
           <button
             type="submit"
             disabled={!newMessage.trim() || isSending}

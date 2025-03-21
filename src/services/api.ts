@@ -35,6 +35,11 @@ export const conversationService = {
   
   sendMessage: async (conversationId: string, userId: string, message: string): Promise<Message> => {
     // Updated to match your API endpoint and request body format
+    console.log('Sending voice message payload:', {
+      conversationId: conversationId,
+      userId,
+      message: message,
+    });
     const response = await apiClient.post(`/api/conversations/${conversationId}/messages/`, {
       user_id: userId,
       message
