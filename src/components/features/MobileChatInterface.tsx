@@ -7,13 +7,34 @@ import { PaperAirplaneIcon } from '@heroicons/react/24/solid';
 import { VoiceRecorder } from './VoiceRecorder';
 
 interface ExtendedMessage extends Message {
-  audioUrl?: string;
+  audioUrl?: string;           // Local URL if unsent message
+  type?: string;               // "text" or "audio"
+  audio_file_path?: string | null; // From backend history
+  message_index?: number;
+  sent_message_index?: number | null;
 }
 
 interface MobileChatInterfaceProps {
   userId: string;
   conversation: Conversation;
 }
+
+// Helper: Build the audio URL from the backend if message.audio_file_path exists.
+const getAudioUrl = (message: ExtendedMessage, conversationId: string, userId: string): string | undefined => {
+  // If we already have a local audioUrl (from recording) use it:
+  if (message.audioUrl) {
+    return message.audioUrl;
+  }
+  // Otherwise, if it's an audio message and the backend provided an audio_file_path,
+  // extract the filename (the last part of the path) and build the URL.
+  if (message.type === 'audio' && message.audio_file_path) {
+    const parts = message.audio_file_path.split('/');
+    const filename = parts[parts.length - 1];
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    return `${baseUrl}/api/conversations/${conversationId}/audio/${filename}?user_id=${userId}`;
+  }
+  return undefined;
+};
 
 export function MobileChatInterface({ userId, conversation }: MobileChatInterfaceProps) {
   const [messages, setMessages] = useState<ExtendedMessage[]>([]);
@@ -84,7 +105,7 @@ export function MobileChatInterface({ userId, conversation }: MobileChatInterfac
         messageInputRef.current.style.height = 'auto';
       }
 
-      // Send to API and get bot response
+      // Send to API and get bot response (text message)
       const botResponse = await conversationService.sendMessage(
         conversation._id,
         userId,
@@ -101,24 +122,26 @@ export function MobileChatInterface({ userId, conversation }: MobileChatInterfac
 
   // Handler for when a voice message is recorded
   const handleVoiceMessage = async (audioBlob: Blob, transcript: string) => {
-    // Create URL for the audio blob for playback in the chat area
+    // Create a temporary local URL so the user can immediately play back the audio.
     const audioUrl = URL.createObjectURL(audioBlob);
     const tempUserMessage: ExtendedMessage = {
       role: 'user',
       content: transcript,
       timestamp: new Date().toISOString(),
-      audioUrl,
+      audioUrl,  // Local URL for immediate playback
+      type: 'audio'
     };
 
     // Optimistically add the voice message
     setMessages(prev => [...prev, tempUserMessage]);
     try {
       setIsSending(true);
-      // Send transcript as text to backend to get bot response
-      const botResponse = await conversationService.sendMessage(
+      // Send the audio message using the new API method.
+      const botResponse = await conversationService.sendAudioMessage(
         conversation._id,
         userId,
-        transcript
+        transcript,
+        audioBlob
       );
       setMessages(prev => [...prev, botResponse]);
     } catch (error) {
@@ -151,36 +174,41 @@ export function MobileChatInterface({ userId, conversation }: MobileChatInterfac
             Start a conversation by sending a message.
           </div>
         ) : (
-          messages.map((message, index) => (
-            <div
-              key={index}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+          messages.map((message, index) => {
+            // Determine the audio URL if the message is of type "audio"
+            const audioUrl = getAudioUrl(message, conversation._id, userId);
+
+            return (
               <div
-                className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                  message.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-900 shadow-sm'
-                }`}
+                key={index}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                {message.audioUrl ? (
-                  <div className="flex flex-col">
-                    <audio controls src={message.audioUrl} className="mb-1" />
-                    <div className="whitespace-pre-wrap">{message.content}</div>
-                  </div>
-                ) : (
-                  <div className="whitespace-pre-wrap">{message.content}</div>
-                )}
                 <div
-                  className={`text-xs mt-1 ${
-                    message.role === 'user' ? 'text-blue-200' : 'text-gray-500'
+                  className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                    message.role === 'user'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-900 shadow-sm'
                   }`}
                 >
-                  {formatDate(message.timestamp)}
+                  {message.type === 'audio' && audioUrl ? (
+                    <div className="flex flex-col">
+                      <audio controls src={audioUrl} className="mb-1" />
+                      <div className="whitespace-pre-wrap">{message.content}</div>
+                    </div>
+                  ) : (
+                    <div className="whitespace-pre-wrap">{message.content}</div>
+                  )}
+                  <div
+                    className={`text-xs mt-1 ${
+                      message.role === 'user' ? 'text-blue-200' : 'text-gray-500'
+                    }`}
+                  >
+                    {formatDate(message.timestamp)}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
         <div ref={messagesEndRef} />
       </div>
